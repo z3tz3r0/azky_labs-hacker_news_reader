@@ -12,7 +12,7 @@ const fetchDetails = async (id: string) => {
 type Params = { id: string };
 
 const StoryDetailPage = async ({ params }: { params: Params }) => {
-  const { id } = await params;
+  const { id } = params;
 
   // fetch the Detail page
   const story = await fetchDetails(id);
