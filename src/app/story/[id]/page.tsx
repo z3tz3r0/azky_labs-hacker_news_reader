@@ -1,35 +1,65 @@
 import Link from "next/link";
 
-const fetchDetails = async (id: string) => {
-  const storyResponse = await fetch(
-    `https://hacker-news.firebaseio.com/v0/item/${id}.json`,
-    { cache: "no-store" }
-  );
-  if (!storyResponse.ok) return null;
-  return storyResponse.json();
+interface Story {
+  id: number;
+  by: string;
+  kids: number[];
+  score: number;
+  title: string;
+  url: string;
+  type: "story";
+}
+
+interface Comment {
+  id: number;
+  by: string;
+  text: string;
+  type: "comment";
+  deleted?: boolean;
+}
+
+const fetchItem = async function <T>(id: string | number): Promise<T | null> {
+  try {
+    const response = await fetch(
+      `https://hacker-news.firebaseio.com/v0/item/${id}.json`,
+      { next: { revalidate: 60 } }
+    );
+
+    if (!response.ok) {
+      console.error(`Failed to fetch item ${id}: ${response.statusText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data as T;
+  } catch (error) {
+    console.error(`Network or other error fetching item ${id}:`, error);
+    return null;
+  }
 };
 
-type Params = { id: string };
+type StoryPageProps = {
+  params: Promise<{ id: string }>;
+};
 
-const StoryDetailPage = async ({ params }: { params: Params }) => {
-  const { id } = params;
+const StoryDetailPage = async ({ params }: StoryPageProps) => {
+  const { id } = await params;
 
-  // fetch the Detail page
-  const story = await fetchDetails(id);
+  const story = await fetchItem<Story>(id);
 
-  if (!story) {
+  if (!story || story.type !== "story") {
     return <div>404, Story not found</div>;
   }
 
-  let comments = [];
+  let comments: Comment[] = [];
   if (story.kids && story.kids.length > 0) {
-    const commentPromises = story.kids.map((commentId: string) =>
-      fetch(`https://hacker-news.firebaseio.com/v0/item/${commentId}.json`, {
-        cache: "no-store",
-      }).then((res) => (res.ok ? res.json() : null))
+    const commentPromises = story.kids.map((commentId) =>
+      fetchItem<Comment>(commentId)
     );
     const settledComments = await Promise.all(commentPromises);
-    comments = settledComments.filter((comment) => comment && !comment.deleted);
+    comments = settledComments.filter(
+      (comment): comment is Comment => comment !== null && !comment.deleted
+    );
   }
 
   return (
